@@ -8,7 +8,7 @@
 PluginStartupInfo PsInfo;
 FarStandardFunctions FSF;
 
-namespace far {
+namespace fui {
 
 std::wstring W(std::string_view utf8) {
   return ps5::Utf8ToWide(utf8);
@@ -217,4 +217,4 @@ void TaskbarClear() {
   PsInfo.AdvControl(&PluginGuid, ACTL_PROGRESSNOTIFY, 0, nullptr);
 }
 
-}  // namespace far
+}  // namespace fui

@@ -149,20 +149,20 @@ bool EditHost(HostConfig& host, bool isNew) {
   std::wstring codePage = std::to_wstring(host.codePage);
   for (;;) {
     std::vector<FarDialogItem> items{
-        far::Item(DI_DOUBLEBOX, 3, 1, 60, 11, isNew ? L"Add PS5 console" : L"Edit PS5 console"),
-        far::Item(DI_TEXT, 5, 2, 0, 2, L"&Name:"),
-        far::Item(DI_EDIT, 5, 3, 58, 3, host.name.c_str(), DIF_FOCUS, 0, L"PS5FM.HostName"),
-        far::Item(DI_TEXT, 5, 4, 0, 4, L"&Address (IP or host name):"),
-        far::Item(DI_EDIT, 5, 5, 58, 5, host.address.c_str(), DIF_HISTORY, 0, L"PS5FM.HostAddress"),
-        far::Item(DI_TEXT, 5, 6, 0, 6, L"&Port:"),
-        far::Item(DI_EDIT, 5, 7, 14, 7, port.c_str()),
-        far::Item(DI_TEXT, 18, 6, 0, 6, L"&Code page for non-UTF-8 names:"),
-        far::Item(DI_EDIT, 18, 7, 28, 7, codePage.c_str()),
-        far::Item(DI_TEXT, -1, 8, 0, 8, L"", DIF_SEPARATOR),
-        far::Item(DI_BUTTON, 0, 9, 0, 9, L"OK", DIF_CENTERGROUP | DIF_DEFAULTBUTTON),
-        far::Item(DI_BUTTON, 0, 9, 0, 9, L"Cancel", DIF_CENTERGROUP),
+        fui::Item(DI_DOUBLEBOX, 3, 1, 60, 11, isNew ? L"Add PS5 console" : L"Edit PS5 console"),
+        fui::Item(DI_TEXT, 5, 2, 0, 2, L"&Name:"),
+        fui::Item(DI_EDIT, 5, 3, 58, 3, host.name.c_str(), DIF_FOCUS, 0, L"PS5FM.HostName"),
+        fui::Item(DI_TEXT, 5, 4, 0, 4, L"&Address (IP or host name):"),
+        fui::Item(DI_EDIT, 5, 5, 58, 5, host.address.c_str(), DIF_HISTORY, 0, L"PS5FM.HostAddress"),
+        fui::Item(DI_TEXT, 5, 6, 0, 6, L"&Port:"),
+        fui::Item(DI_EDIT, 5, 7, 14, 7, port.c_str()),
+        fui::Item(DI_TEXT, 18, 6, 0, 6, L"&Code page for non-UTF-8 names:"),
+        fui::Item(DI_EDIT, 18, 7, 28, 7, codePage.c_str()),
+        fui::Item(DI_TEXT, -1, 8, 0, 8, L"", DIF_SEPARATOR),
+        fui::Item(DI_BUTTON, 0, 9, 0, 9, L"OK", DIF_CENTERGROUP | DIF_DEFAULTBUTTON),
+        fui::Item(DI_BUTTON, 0, 9, 0, 9, L"Cancel", DIF_CENTERGROUP),
     };
-    far::DialogResult r = far::RunDialog(HostDialogGuid, 64, 13, nullptr, items);
+    fui::DialogResult r = fui::RunDialog(HostDialogGuid, 64, 13, nullptr, items);
     if (r.exitCode != 10) return false;
     HostConfig edited = host;
     edited.name = Trim(r.texts[2]);
@@ -174,11 +174,11 @@ bool EditHost(HostConfig& host, bool isNew) {
     host.name = edited.name;
     host.address = edited.address;
     if (edited.address.empty()) {
-      far::ShowError(L"PS5", L"Enter the console's IP address or host name.");
+      fui::ShowError(L"PS5", L"Enter the console's IP address or host name.");
       continue;
     }
     if (portValue == 0 || portValue > 65535) {
-      far::ShowError(L"PS5", L"The port must be a number from 1 to 65535.");
+      fui::ShowError(L"PS5", L"The port must be a number from 1 to 65535.");
       continue;
     }
     if (edited.name.empty()) edited.name = edited.address;
@@ -192,17 +192,17 @@ bool EditHost(HostConfig& host, bool isNew) {
 bool ConfigureDialog() {
   Options o = Opt();
   std::vector<FarDialogItem> items{
-      far::Item(DI_DOUBLEBOX, 3, 1, 56, 10, L"PS5 File Manager"),
-      far::Item(DI_CHECKBOX, 5, 2, 0, 2, L"Add to &disk menus", DIF_NONE, o.addToDiskMenu),
-      far::Item(DI_CHECKBOX, 5, 3, 0, 3, L"&Confirm copy/move on the console", DIF_NONE, o.confirmRemoteCopy),
-      far::Item(DI_CHECKBOX, 5, 4, 0, 4, L"&Enter on a .pkg file shows PKG info", DIF_NONE, o.enterOpensPkgInfo),
-      far::Item(DI_TEXT, 5, 6, 0, 6, L"Command line &prefix:"),
-      far::Item(DI_EDIT, 28, 6, 40, 6, o.prefix.c_str()),
-      far::Item(DI_TEXT, -1, 8, 0, 8, L"", DIF_SEPARATOR),
-      far::Item(DI_BUTTON, 0, 9, 0, 9, L"OK", DIF_CENTERGROUP | DIF_DEFAULTBUTTON),
-      far::Item(DI_BUTTON, 0, 9, 0, 9, L"Cancel", DIF_CENTERGROUP),
+      fui::Item(DI_DOUBLEBOX, 3, 1, 56, 10, L"PS5 File Manager"),
+      fui::Item(DI_CHECKBOX, 5, 2, 0, 2, L"Add to &disk menus", DIF_NONE, o.addToDiskMenu),
+      fui::Item(DI_CHECKBOX, 5, 3, 0, 3, L"&Confirm copy/move on the console", DIF_NONE, o.confirmRemoteCopy),
+      fui::Item(DI_CHECKBOX, 5, 4, 0, 4, L"&Enter on a .pkg file shows PKG info", DIF_NONE, o.enterOpensPkgInfo),
+      fui::Item(DI_TEXT, 5, 6, 0, 6, L"Command line &prefix:"),
+      fui::Item(DI_EDIT, 28, 6, 40, 6, o.prefix.c_str()),
+      fui::Item(DI_TEXT, -1, 8, 0, 8, L"", DIF_SEPARATOR),
+      fui::Item(DI_BUTTON, 0, 9, 0, 9, L"OK", DIF_CENTERGROUP | DIF_DEFAULTBUTTON),
+      fui::Item(DI_BUTTON, 0, 9, 0, 9, L"Cancel", DIF_CENTERGROUP),
   };
-  far::DialogResult r = far::RunDialog(ConfigDialogGuid, 60, 12, nullptr, items);
+  fui::DialogResult r = fui::RunDialog(ConfigDialogGuid, 60, 12, nullptr, items);
   if (r.exitCode != 7) return false;
   o.addToDiskMenu = r.checks[1];
   o.confirmRemoteCopy = r.checks[2];

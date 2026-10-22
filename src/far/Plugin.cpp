@@ -94,7 +94,7 @@ HANDLE WINAPI OpenW(const OpenInfo* info) {
         return nullptr;
     }
   } catch (const std::exception& e) {
-    far::ShowError(L"PS5", far::W(e.what()));
+    fui::ShowError(L"PS5", fui::W(e.what()));
   } catch (...) {
   }
   return nullptr;

@@ -37,7 +37,7 @@ std::wstring OpTitle(const std::string& op) {
   if (op == "pkg_install") return L"Installing package";
   if (op == "upload") return L"Uploading";
   if (op == "download") return L"Downloading";
-  return far::W(op);
+  return fui::W(op);
 }
 
 }  // namespace
@@ -49,7 +49,7 @@ Progress::Progress(std::wstring title, bool visible) : title_(std::move(title)),
 
 Progress::~Progress() {
   if (visible_) {
-    far::TaskbarClear();
+    fui::TaskbarClear();
     if (screen_) PsInfo.RestoreScreen(screen_);
   }
 }
@@ -96,8 +96,8 @@ void Progress::ServerTask(const ps5::TaskInfo& task) {
 }
 
 bool Progress::CheckCancel() {
-  if (!far::EscPressed()) return false;
-  bool cancel = far::Message(FMSG_WARNING, {title_, L"Cancel the operation?"}, {L"Yes", L"No"},
+  if (!fui::EscPressed()) return false;
+  bool cancel = fui::Message(FMSG_WARNING, {title_, L"Cancel the operation?"}, {L"Yes", L"No"},
                              MessageGuid) == 0;
   Draw(true);
   return cancel;
@@ -128,18 +128,18 @@ void Progress::Draw(bool force) {
       wchar_t files[64];
       swprintf(files, 64, L"Files: %llu of %llu", static_cast<unsigned long long>(doneFiles_),
                static_cast<unsigned long long>(totalFiles_));
-      lines.push_back(std::wstring(files) + L"   " + far::FormatSize(doneBytes_) + L" of " +
-                      far::FormatSize(totalBytes_));
+      lines.push_back(std::wstring(files) + L"   " + fui::FormatSize(doneBytes_) + L" of " +
+                      fui::FormatSize(totalBytes_));
       lines.push_back(Bar(doneBytes_, totalBytes_));
       uint64_t speed = elapsed ? sessionBytes_ / elapsed : 0;
-      std::wstring timing = L"Time " + far::W(ps5::FormatDuration(elapsed));
+      std::wstring timing = L"Time " + fui::W(ps5::FormatDuration(elapsed));
       if (speed) {
-        timing += L"   " + far::FormatSize(speed) + L"/s";
+        timing += L"   " + fui::FormatSize(speed) + L"/s";
         if (totalBytes_ > doneBytes_)
-          timing += L"   Left " + far::W(ps5::FormatDuration((totalBytes_ - doneBytes_) / speed));
+          timing += L"   Left " + fui::W(ps5::FormatDuration((totalBytes_ - doneBytes_) / speed));
       }
       lines.push_back(timing);
-      far::TaskbarProgress(doneBytes_, totalBytes_);
+      fui::TaskbarProgress(doneBytes_, totalBytes_);
       break;
     }
     case Mode::Task: {
@@ -151,15 +151,15 @@ void Progress::Draw(bool force) {
         lines.push_back(Fit(ps5::path_codec::RawToDisplay(task_.dst)));
       }
       lines.push_back(Bar(task_.done, task_.total));
-      std::wstring info = far::FormatSize(task_.done) + L" of " + far::FormatSize(task_.total);
-      if (task_.speed) info += L"   " + far::FormatSize(task_.speed) + L"/s";
-      if (task_.eta) info += L"   Left " + far::W(ps5::FormatDuration(task_.eta));
+      std::wstring info = fui::FormatSize(task_.done) + L" of " + fui::FormatSize(task_.total);
+      if (task_.speed) info += L"   " + fui::FormatSize(task_.speed) + L"/s";
+      if (task_.eta) info += L"   Left " + fui::W(ps5::FormatDuration(task_.eta));
       lines.push_back(info);
       if (task_.cancelRequested) lines.push_back(L"Cancelling...");
-      far::TaskbarProgress(task_.done, task_.total);
+      fui::TaskbarProgress(task_.done, task_.total);
       break;
     }
   }
   // Far draws "\x1" lines as separators in messages.
-  far::Message(FMSG_LEFTALIGN, lines, {}, ProgressGuid);
+  fui::Message(FMSG_LEFTALIGN, lines, {}, ProgressGuid);
 }

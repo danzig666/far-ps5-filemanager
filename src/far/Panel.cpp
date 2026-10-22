@@ -15,7 +15,7 @@
 #include "WinHttpTransport.hpp"
 
 namespace codec = ps5::path_codec;
-using far::W;
+using fui::W;
 
 namespace {
 
@@ -39,7 +39,7 @@ std::shared_ptr<Session> GetSession(const HostConfig& host) {
   }
   auto session = std::make_shared<Session>();
   session->host = host;
-  session->client = std::make_unique<ps5::Ps5Client>(Transport(), far::U(host.address), host.port);
+  session->client = std::make_unique<ps5::Ps5Client>(Transport(), fui::U(host.address), host.port);
   sessions[key] = session;
   return session;
 }
@@ -99,7 +99,7 @@ std::wstring LastErrorText() {
 }
 
 [[noreturn]] void ThrowLastError(const std::wstring& what) {
-  throw std::runtime_error(far::U(what + L"\n" + LastErrorText()));
+  throw std::runtime_error(fui::U(what + L"\n" + LastErrorText()));
 }
 
 class File {
@@ -123,13 +123,13 @@ bool CreateDirs(const std::wstring& path) {
   std::wstring p = path;
   while (!p.empty() && (p.back() == L'\\' || p.back() == L'/')) p.pop_back();
   if (p.empty()) return true;
-  DWORD attrs = GetFileAttributesW(far::LongPath(p).c_str());
+  DWORD attrs = GetFileAttributesW(fui::LongPath(p).c_str());
   if (attrs != INVALID_FILE_ATTRIBUTES) return (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
   size_t slash = p.find_last_of(L"\\/");
   if (slash != std::wstring::npos && slash > 2) {
     if (!CreateDirs(p.substr(0, slash))) return false;
   }
-  return CreateDirectoryW(far::LongPath(p).c_str(), nullptr) || GetLastError() == ERROR_ALREADY_EXISTS;
+  return CreateDirectoryW(fui::LongPath(p).c_str(), nullptr) || GetLastError() == ERROR_ALREADY_EXISTS;
 }
 
 std::wstring FullLocalPath(const std::wstring& path) {
@@ -211,17 +211,17 @@ bool Panel::Run(const std::wstring& title, bool silent, const std::function<void
       if (e.code() == "active_task") {
         HandleBusy(title);
       } else {
-        far::ShowError(title, W(ps5::DescribeApiError(e)));
+        fui::ShowError(title, W(ps5::DescribeApiError(e)));
       }
     }
   } catch (const ps5::NetError& e) {
     if (!silent) {
       std::wstring where = session_ ? session_->host.Endpoint() : L"the console";
-      far::ShowError(title, L"Cannot reach " + where + L":\n" + W(e.what()) +
+      fui::ShowError(title, L"Cannot reach " + where + L":\n" + W(e.what()) +
                                 L"\nIs the payload running on the console?");
     }
   } catch (const std::exception& e) {
-    if (!silent) far::ShowError(title, W(e.what()));
+    if (!silent) fui::ShowError(title, W(e.what()));
   }
   return false;
 }
@@ -234,7 +234,7 @@ void Panel::HandleBusy(const std::wstring& title) {
   } catch (const std::exception&) {
   }
   if (!found) {
-    far::ShowError(title, L"The console is busy with another task. Try again in a moment.");
+    fui::ShowError(title, L"The console is busy with another task. Try again in a moment.");
     return;
   }
   unsigned percent = task.total ? static_cast<unsigned>(task.done * 100 / task.total) : 0;
@@ -245,7 +245,7 @@ void Panel::HandleBusy(const std::wstring& title) {
   std::vector<std::wstring> buttons{L"&Wait"};
   if (cancellable) buttons.push_back(L"&Cancel task");
   buttons.push_back(L"Close");
-  intptr_t choice = far::Message(FMSG_WARNING, lines, buttons, MessageGuid);
+  intptr_t choice = fui::Message(FMSG_WARNING, lines, buttons, MessageGuid);
   if (choice == 0) {
     ReportTask(WaitTask(task.id, title, cancellable), title);
   } else if (cancellable && choice == 1) {
@@ -285,7 +285,7 @@ bool Panel::ReportTask(const ps5::TaskResult& result, const std::wstring& title)
     case ps5::TaskOutcome::Vanished:
       return true;
     case ps5::TaskOutcome::Failed:
-      far::ShowError(title, W(ps5::DescribeTaskError(result.last)));
+      fui::ShowError(title, W(ps5::DescribeTaskError(result.last)));
       return false;
     case ps5::TaskOutcome::Canceled:
       return false;
@@ -329,7 +329,7 @@ Panel* Panel::OpenFromText(const std::wstring& input, bool shortcut) {
     size_t bar = text.find(L'|');
     if (bar != std::wstring::npos) {
       hostPart = text.substr(0, bar);
-      rawPath = codec::TokenToRaw(far::U(text.substr(bar + 1)));
+      rawPath = codec::TokenToRaw(fui::U(text.substr(bar + 1)));
     }
   } else {
     if (hostPart.rfind(L"//", 0) == 0) hostPart = hostPart.substr(2);
@@ -444,7 +444,7 @@ void Panel::LoadVolumes() {
   std::set<std::wstring> used;
   bool hasRoot = false;
   auto add = [&](std::wstring name, const ps5::SpaceInfo& info) {
-    name = far::SafeFileName(name);
+    name = fui::SafeFileName(name);
     std::wstring unique = name;
     for (int i = 2; used.count(Lower(unique)); ++i) unique = name + L"-" + std::to_wstring(i);
     used.insert(Lower(unique));
@@ -501,11 +501,11 @@ void Panel::UnlockSmb(const std::string& rawPath, bool silent) {
   auto ask = [&]() -> std::string {
     if (silent) throw ps5::CancelledError();
     std::wstring password;
-    if (!far::Input(L"SMB password", L"Password for " + codec::RawToDisplay(root) + L":", password,
+    if (!fui::Input(L"SMB password", L"Password for " + codec::RawToDisplay(root) + L":", password,
                     nullptr, FIB_PASSWORD | FIB_ENABLEEMPTY)) {
       throw ps5::CancelledError();
     }
-    return far::U(password);
+    return fui::U(password);
   };
   std::string password = guest ? std::string() : ask();
   try {
@@ -676,7 +676,7 @@ intptr_t Panel::GetFindData(GetFindDataInfo* info) {
         else if (key == "storageRoot") kind = L"Whole file system";
         else if (v.info.isSmb()) kind = L"SMB " + codec::RawToDisplay(v.info.path);
         else kind = codec::RawToDisplay(v.info.path);
-        if (v.info.total) kind += L", " + far::FormatSize(v.info.free) + L" free of " + far::FormatSize(v.info.total);
+        if (v.info.total) kind += L", " + fui::FormatSize(v.info.free) + L" free of " + fui::FormatSize(v.info.total);
         if (v.info.custom && !v.info.available) kind += L" (offline)";
         it.Description = addString(kind);
         it.FileSize = v.info.total;
@@ -701,7 +701,7 @@ intptr_t Panel::GetFindData(GetFindDataInfo* info) {
         it = {};
         it.FileName = addString(names_[i]);
         it.FileSize = e.isDir() ? 0 : e.size;
-        FILETIME ft = far::UnixToFileTime(e.mtime);
+        FILETIME ft = fui::UnixToFileTime(e.mtime);
         it.LastWriteTime = ft;
         it.ChangeTime = ft;
         it.CreationTime = ft;
@@ -863,7 +863,7 @@ intptr_t Panel::DeleteFiles(const DeleteFilesInfo* info) {
     }
     if (names.empty()) return FALSE;
     std::wstring what = names.size() == 1 ? L"\"" + *names.begin() + L"\"" : std::to_wstring(names.size()) + L" consoles";
-    if (!silent && !far::Confirm(L"Delete", L"Remove " + what + L" from the list?", L"Delete", true)) return FALSE;
+    if (!silent && !fui::Confirm(L"Delete", L"Remove " + what + L" from the list?", L"Delete", true)) return FALSE;
     hosts_ = config::LoadHosts();
     hosts_.erase(std::remove_if(hosts_.begin(), hosts_.end(), [&](const HostConfig& h) { return names.count(h.name) > 0; }),
                  hosts_.end());
@@ -871,7 +871,7 @@ intptr_t Panel::DeleteFiles(const DeleteFilesInfo* info) {
     return TRUE;
   }
   if (level_ == Level::Volumes) {
-    if (!silent) far::ShowError(L"Delete", L"Volumes cannot be deleted.");
+    if (!silent) fui::ShowError(L"Delete", L"Volumes cannot be deleted.");
     return FALSE;
   }
   std::vector<ps5::ListEntry> entries = EntriesFromItems(info->PanelItem, info->ItemsNumber);
@@ -883,7 +883,7 @@ intptr_t Panel::DeleteFiles(const DeleteFilesInfo* info) {
     } else {
       what = std::to_wstring(entries.size()) + L" items";
     }
-    if (far::Message(FMSG_WARNING, {L"Delete", L"Do you wish to delete " + what + L"?"},
+    if (fui::Message(FMSG_WARNING, {L"Delete", L"Do you wish to delete " + what + L"?"},
                      {L"&Delete", L"Cancel"}, MessageGuid) != 0) {
       return FALSE;
     }
@@ -910,11 +910,11 @@ intptr_t Panel::MakeDirectory(MakeDirectoryInfo* info) {
     return 1;
   }
   if (level_ == Level::Volumes) {
-    if (!silent) far::ShowError(L"Make folder", L"Open a volume first.");
+    if (!silent) fui::ShowError(L"Make folder", L"Open a volume first.");
     return -1;
   }
   std::wstring name = info->Name ? info->Name : L"";
-  if (!silent && !far::Input(L"Make folder", L"Create the folder:", name, L"NewFolder")) return -1;
+  if (!silent && !fui::Input(L"Make folder", L"Create the folder:", name, L"NewFolder")) return -1;
   name = Trim(Slashes(name));
   std::vector<std::wstring> parts;
   size_t start = 0;
@@ -953,7 +953,7 @@ intptr_t Panel::GetFiles(GetFilesInfo* info) {
   OPERATION_MODES mode = info->OpMode;
   bool quiet = (mode & (OPM_SILENT | OPM_FIND | OPM_VIEW | OPM_EDIT | OPM_QUICKVIEW)) != 0;
   if (level_ != Level::Dir) {
-    if (!quiet) far::ShowError(kTitle, level_ == Level::Hosts ? L"Select a console first." : L"Open a volume first.");
+    if (!quiet) fui::ShowError(kTitle, level_ == Level::Hosts ? L"Select a console first." : L"Open a volume first.");
     return 0;
   }
   std::vector<ps5::ListEntry> roots = EntriesFromItems(info->PanelItem, info->ItemsNumber);
@@ -965,7 +965,7 @@ intptr_t Panel::GetFiles(GetFilesInfo* info) {
                                           : std::to_wstring(roots.size()) + L" items";
     std::wstring prompt = (info->Move ? L"Move " : L"Copy ") + what + L" to:";
     if (!dest.empty() && dest.back() != L'\\') dest += L"\\";
-    if (!far::Input(info->Move ? L"Move from PS5" : L"Copy from PS5", prompt, dest, L"Copy",
+    if (!fui::Input(info->Move ? L"Move from PS5" : L"Copy from PS5", prompt, dest, L"Copy",
                     FIB_EDITPATH)) {
       return -1;
     }
@@ -992,7 +992,7 @@ bool Panel::Download(const std::vector<ps5::ListEntry>& roots, const std::wstrin
   // "Copy as": one item to a path that is not an existing folder.
   std::wstring destDir = destInput;
   std::wstring renameTo;
-  DWORD destAttrs = GetFileAttributesW(far::LongPath(destInput).c_str());
+  DWORD destAttrs = GetFileAttributesW(fui::LongPath(destInput).c_str());
   bool destIsDir = destAttrs != INVALID_FILE_ATTRIBUTES && (destAttrs & FILE_ATTRIBUTE_DIRECTORY);
   bool trailingSlash = !destInput.empty() && (destInput.back() == L'\\' || destInput.back() == L'/');
   if (roots.size() == 1 && !destIsDir && !trailingSlash) {
@@ -1036,7 +1036,7 @@ bool Panel::Download(const std::vector<ps5::ListEntry>& roots, const std::wstrin
         size_t slash = node.rel.find('/', start);
         std::string seg = node.rel.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
         if (first) topName = seg;
-        std::wstring name = first && !renameTo.empty() ? renameTo : far::SafeFileName(codec::RawToDisplay(seg));
+        std::wstring name = first && !renameTo.empty() ? renameTo : fui::SafeFileName(codec::RawToDisplay(seg));
         local = JoinLocal(local, name);
         first = false;
         if (slash == std::string::npos) break;
@@ -1052,11 +1052,11 @@ bool Panel::Download(const std::vector<ps5::ListEntry>& roots, const std::wstrin
       for (;;) {
         try {
           WIN32_FILE_ATTRIBUTE_DATA fad{};
-          bool exists = GetFileAttributesExW(far::LongPath(local).c_str(), GetFileExInfoStandard, &fad) != FALSE;
+          bool exists = GetFileAttributesExW(fui::LongPath(local).c_str(), GetFileExInfoStandard, &fad) != FALSE;
           bool resume = false;
           if (exists) {
             if (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-              throw std::runtime_error(far::U(L"A folder with this name already exists:\n" + local));
+              throw std::runtime_error(fui::U(L"A folder with this name already exists:\n" + local));
             uint64_t localSize = (static_cast<uint64_t>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow;
             if (skipAll) {
               failedRoots.insert(topName);
@@ -1073,11 +1073,11 @@ bool Panel::Download(const std::vector<ps5::ListEntry>& roots, const std::wstrin
               std::vector<std::wstring> buttons{L"&Overwrite", L"&Skip"};
               if (canResume) buttons.push_back(L"&Resume");
               buttons.insert(buttons.end(), {L"Overwrite &all", L"S&kip all", L"&Cancel"});
-              intptr_t r = far::Message(
+              intptr_t r = fui::Message(
                   FMSG_WARNING,
                   {L"File exists", L"The file already exists:", local, L"\x1",
-                   L"New:      " + far::FormatSize(node.entry.size) + L"  " + far::FormatTime(node.entry.mtime),
-                   L"Existing: " + far::FormatSize(localSize) + L"  " + localTime},
+                   L"New:      " + fui::FormatSize(node.entry.size) + L"  " + fui::FormatTime(node.entry.mtime),
+                   L"Existing: " + fui::FormatSize(localSize) + L"  " + localTime},
                   buttons, MessageGuid);
               progress.Draw(true);
               std::wstring choice = r >= 0 ? buttons[static_cast<size_t>(r)] : L"&Cancel";
@@ -1091,11 +1091,11 @@ bool Panel::Download(const std::vector<ps5::ListEntry>& roots, const std::wstrin
               if (choice == L"Overwrite &all") overwriteAll = true;
               if (choice == L"&Resume") resume = true;
             }
-            if (!resume) SetFileAttributesW(far::LongPath(local).c_str(), FILE_ATTRIBUTE_NORMAL);
+            if (!resume) SetFileAttributesW(fui::LongPath(local).c_str(), FILE_ATTRIBUTE_NORMAL);
           }
 
-          std::wstring target = far::LongPath(local);
-          std::wstring temp = resume ? target : far::LongPath(local + L".ps5part");
+          std::wstring target = fui::LongPath(local);
+          std::wstring temp = resume ? target : fui::LongPath(local + L".ps5part");
           File file(CreateFileW(temp.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                                 resume ? OPEN_EXISTING : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
           if (!file.valid()) ThrowLastError(L"Cannot create " + local);
@@ -1127,7 +1127,7 @@ bool Panel::Download(const std::vector<ps5::ListEntry>& roots, const std::wstrin
                 progress.BeginFile(remoteDisplay, local, node.entry.size, 0);
               }
             }
-            FILETIME ft = far::UnixToFileTime(node.entry.mtime);
+            FILETIME ft = fui::UnixToFileTime(node.entry.mtime);
             SetFileTime(file.get(), nullptr, nullptr, &ft);
             file.Close();
             if (temp != target && !MoveFileExW(temp.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING))
@@ -1145,7 +1145,7 @@ bool Panel::Download(const std::vector<ps5::ListEntry>& roots, const std::wstrin
           if (quiet) throw;
           std::wstring text = W(e.what());
           if (auto api = dynamic_cast<const ps5::ApiError*>(&e)) text = W(ps5::DescribeApiError(*api));
-          intptr_t r = far::Message(FMSG_WARNING, {title, L"Cannot copy", remoteDisplay, text},
+          intptr_t r = fui::Message(FMSG_WARNING, {title, L"Cannot copy", remoteDisplay, text},
                                     {L"&Retry", L"&Skip", L"&Cancel"}, MessageGuid);
           progress.Draw(true);
           if (r == 0) continue;
@@ -1183,7 +1183,7 @@ intptr_t Panel::PutFiles(const PutFilesInfo* info) {
   ApplyCodePage();
   bool silent = (info->OpMode & OPM_SILENT) != 0;
   if (level_ != Level::Dir) {
-    if (!silent) far::ShowError(kTitle, level_ == Level::Hosts ? L"Select a console first." : L"Open a volume first.");
+    if (!silent) fui::ShowError(kTitle, level_ == Level::Hosts ? L"Select a console first." : L"Open a volume first.");
     return 0;
   }
   bool ok = Upload(info);
@@ -1239,7 +1239,7 @@ bool Panel::Upload(const PutFilesInfo* info) {
       const ps5::ListEntry& existing = *it->second;
       if (existing.isDir() != t.dir) {
         if (!t.dir || !existing.isDir()) {
-          far::ShowError(title, L"\"" + t.name + L"\" exists on the console as a " +
+          fui::ShowError(title, L"\"" + t.name + L"\" exists on the console as a " +
                                     (existing.isDir() ? L"folder" : L"file") + L" and will be skipped.");
           t.keep = false;
           continue;
@@ -1249,7 +1249,7 @@ bool Panel::Upload(const PutFilesInfo* info) {
         auto snap = editSnapshots_.find(t.name);
         if (snap != editSnapshots_.end() &&
             (snap->second.size != existing.size || snap->second.mtime != existing.mtime)) {
-          if (far::Message(FMSG_WARNING,
+          if (fui::Message(FMSG_WARNING,
                            {title, L"The file changed on the console since it was opened:", t.name,
                             L"Overwrite it with your version?"},
                            {L"&Overwrite", L"&Cancel"}, MessageGuid) != 0) {
@@ -1271,9 +1271,9 @@ bool Panel::Upload(const PutFilesInfo* info) {
       std::vector<std::wstring> lines{L"Already exists", kind, t.name};
       if (!existing.isDir()) {
         lines.push_back(L"\x1");
-        lines.push_back(L"Existing: " + far::FormatSize(existing.size) + L"  " + far::FormatTime(existing.mtime));
+        lines.push_back(L"Existing: " + fui::FormatSize(existing.size) + L"  " + fui::FormatTime(existing.mtime));
       }
-      intptr_t r = far::Message(FMSG_WARNING, lines,
+      intptr_t r = fui::Message(FMSG_WARNING, lines,
                                 {L"&Overwrite", L"&Skip", L"Overwrite &all", L"S&kip all", L"&Cancel"}, MessageGuid);
       progress.Draw(true);
       switch (r) {
@@ -1292,7 +1292,7 @@ bool Panel::Upload(const PutFilesInfo* info) {
           progress.Status(L"Scanning " + dir);
           progress.ThrowIfCancelled();
           WIN32_FIND_DATAW fd;
-          HANDLE find = FindFirstFileExW(far::LongPath(JoinLocal(dir, L"*")).c_str(), FindExInfoBasic, &fd,
+          HANDLE find = FindFirstFileExW(fui::LongPath(JoinLocal(dir, L"*")).c_str(), FindExInfoBasic, &fd,
                                          FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
           if (find == INVALID_HANDLE_VALUE) {
             if (GetLastError() == ERROR_FILE_NOT_FOUND) return;
@@ -1303,7 +1303,7 @@ bool Panel::Upload(const PutFilesInfo* info) {
             std::wstring name = fd.cFileName;
             if (name == L"." || name == L"..") continue;
             std::wstring path = JoinLocal(dir, name);
-            std::string childRel = rel + "/" + far::U(name);
+            std::string childRel = rel + "/" + fui::U(name);
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
               if (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) continue;  // avoid link loops
               nodes.push_back({path, childRel, 0, true, top});
@@ -1319,13 +1319,13 @@ bool Panel::Upload(const PutFilesInfo* info) {
     for (size_t i = 0; i < tops.size(); ++i) {
       const Top& t = tops[i];
       if (!t.keep) continue;
-      std::string rel = far::U(t.name);
+      std::string rel = fui::U(t.name);
       if (t.dir) {
         nodes.push_back({t.path, rel, 0, true, i});
         walk(t.path, rel, i);
       } else {
         WIN32_FILE_ATTRIBUTE_DATA fad{};
-        if (!GetFileAttributesExW(far::LongPath(t.path).c_str(), GetFileExInfoStandard, &fad))
+        if (!GetFileAttributesExW(fui::LongPath(t.path).c_str(), GetFileExInfoStandard, &fad))
           ThrowLastError(L"Cannot read " + t.path);
         uint64_t size = (static_cast<uint64_t>(fad.nFileSizeHigh) << 32) | fad.nFileSizeLow;
         nodes.push_back({t.path, rel, size, false, i});
@@ -1364,7 +1364,7 @@ bool Panel::Upload(const PutFilesInfo* info) {
       try {
         for (size_t i = 0; i < files.size(); ++i) {
           const LocalNode& n = *files[i];
-          File file(CreateFileW(far::LongPath(n.path).c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+          File file(CreateFileW(fui::LongPath(n.path).c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                 nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
           if (!file.valid()) ThrowLastError(L"Cannot open " + n.path);
           progress.BeginFile(n.path, codec::RawToDisplay(codec::Join(cur_, n.rel)), n.size);
@@ -1402,10 +1402,10 @@ bool Panel::Upload(const PutFilesInfo* info) {
     if (info->Move) {
       for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
         if (it->dir) {
-          RemoveDirectoryW(far::LongPath(it->path).c_str());
+          RemoveDirectoryW(fui::LongPath(it->path).c_str());
         } else {
-          SetFileAttributesW(far::LongPath(it->path).c_str(), FILE_ATTRIBUTE_NORMAL);
-          DeleteFileW(far::LongPath(it->path).c_str());
+          SetFileAttributesW(fui::LongPath(it->path).c_str(), FILE_ATTRIBUTE_NORMAL);
+          DeleteFileW(fui::LongPath(it->path).c_str());
         }
       }
     }
@@ -1495,7 +1495,7 @@ bool Panel::RemoteCopyMove(bool move) {
     std::wstring what = entries.size() == 1 ? L"\"" + codec::RawToDisplay(entries[0].name) + L"\""
                                             : std::to_wstring(entries.size()) + L" items";
     std::wstring input = dstDisplay;
-    if (!far::Input(title, (move ? L"Move " : L"Copy ") + what + L" to:", input, L"PS5FM.CopyTarget")) return true;
+    if (!fui::Input(title, (move ? L"Move " : L"Copy ") + what + L" to:", input, L"PS5FM.CopyTarget")) return true;
     input = Trim(input);
     if (input.empty()) return true;
     if (input != dstDisplay) dst = ResolveInput(input);
@@ -1522,7 +1522,7 @@ bool Panel::RemoteCopyMove(bool move) {
         std::vector<std::wstring> lines{title, L"These items already exist in the destination:"};
         for (size_t i = 0; i < conflicts.size() && i < 5; ++i) lines.push_back(conflicts[i]);
         if (conflicts.size() > 5) lines.push_back(L"...and " + std::to_wstring(conflicts.size() - 5) + L" more");
-        intptr_t r = far::Message(FMSG_WARNING, lines, {L"&Overwrite", L"&Skip them", L"&Cancel"}, MessageGuid);
+        intptr_t r = fui::Message(FMSG_WARNING, lines, {L"&Overwrite", L"&Skip them", L"&Cancel"}, MessageGuid);
         if (r == 0) {
           overwrite = true;
         } else if (r == 1) {
@@ -1556,7 +1556,7 @@ void Panel::RenameCurrent() {
   const ps5::ListEntry entry = current[0];
   std::wstring oldName = codec::RawToDisplay(entry.name);
   std::wstring input = oldName;
-  if (!far::Input(L"Rename", L"Rename or move \"" + oldName + L"\" to:", input, L"PS5FM.Rename")) return;
+  if (!fui::Input(L"Rename", L"Rename or move \"" + oldName + L"\" to:", input, L"PS5FM.Rename")) return;
   input = Trim(input);
   if (input.empty() || input == oldName) return;
   bool isMove = input.find_first_of(L"/\\") != std::wstring::npos;
@@ -1579,7 +1579,7 @@ void Panel::RenameCurrent() {
 void Panel::ActionsMenu() {
   ApplyCodePage();
   if (level_ == Level::Hosts || !session_) {
-    far::ShowInfo(kTitle, L"Open a console first.");
+    fui::ShowInfo(kTitle, L"Open a console first.");
     return;
   }
   std::vector<ps5::ListEntry> selected = level_ == Level::Dir ? SelectedEntries(false) : std::vector<ps5::ListEntry>{};
@@ -1614,28 +1614,28 @@ void Panel::ActionsMenu() {
   add(L"Open &web UI in browser", Browser);
   add(L"Stop the pa&yload", Stop);
 
-  intptr_t index = far::Menu(L"PS5 actions", items, session_->host.Endpoint());
+  intptr_t index = fui::Menu(L"PS5 actions", items, session_->host.Endpoint());
   if (index < 0 || static_cast<size_t>(index) >= actions.size()) return;
   switch (actions[static_cast<size_t>(index)]) {
     case InstallPkg:
-      if (pkgs.empty()) far::ShowError(L"Install PKG", L"Select one or more .pkg files.");
+      if (pkgs.empty()) fui::ShowError(L"Install PKG", L"Select one or more .pkg files.");
       else InstallPkgs(pkgs);
       break;
     case PkgInfoItem:
-      if (pkgs.empty()) far::ShowError(L"PKG information", L"Put the cursor on a .pkg file.");
+      if (pkgs.empty()) fui::ShowError(L"PKG information", L"Put the cursor on a .pkg file.");
       else PkgInfo(pkgs[0]);
       break;
     case LaunchElfItem:
       if (!haveFile || Extension(codec::RawToDisplay(selected[0].name)) != L".elf")
-        far::ShowError(L"Launch ELF", L"Put the cursor on an .elf file.");
+        fui::ShowError(L"Launch ELF", L"Put the cursor on an .elf file.");
       else LaunchElf(selected[0]);
       break;
     case Extract:
-      if (archives.empty() && selected.empty()) far::ShowError(L"Extract", L"Select one or more archives.");
+      if (archives.empty() && selected.empty()) fui::ShowError(L"Extract", L"Select one or more archives.");
       else ExtractDialog(archives.empty() ? selected : archives);
       break;
     case Chmod:
-      if (selected.empty()) far::ShowError(L"Permissions", L"Select files or folders.");
+      if (selected.empty()) fui::ShowError(L"Permissions", L"Select files or folders.");
       else ChmodDialog(selected);
       break;
     case Space: ShowSpace(); break;
@@ -1667,7 +1667,7 @@ void Panel::PkgInfo(const ps5::ListEntry& entry) {
   lines.push_back(L"Content ID: " + text(json["content_id"]));
   lines.push_back(L"Platform:   " + text(json["platform"]));
   if (!version.empty()) lines.push_back(L"Version:    " + version);
-  lines.push_back(L"Size:       " + far::FormatSize(json["size"].asUInt()));
+  lines.push_back(L"Size:       " + fui::FormatSize(json["size"].asUInt()));
   size_t extra = 0;
   for (const auto& field : json["fields"].items()) {
     std::string name = field["name"].asString();
@@ -1678,13 +1678,13 @@ void Panel::PkgInfo(const ps5::ListEntry& entry) {
     if (value.size() > 50) value = value.substr(0, 47) + L"...";
     lines.push_back(W(name) + L": " + value);
   }
-  if (far::Message(FMSG_LEFTALIGN, lines, {L"&Install", L"Close"}, MessageGuid) == 0) InstallPkgs({entry});
+  if (fui::Message(FMSG_LEFTALIGN, lines, {L"&Install", L"Close"}, MessageGuid) == 0) InstallPkgs({entry});
 }
 
 void Panel::InstallPkgs(const std::vector<ps5::ListEntry>& entries) {
   std::wstring what = entries.size() == 1 ? codec::RawToDisplay(entries[0].name)
                                           : std::to_wstring(entries.size()) + L" packages";
-  if (!far::Confirm(L"Install PKG", L"Install " + what + L" on the console?", L"&Install")) return;
+  if (!fui::Confirm(L"Install PKG", L"Install " + what + L" on the console?", L"&Install")) return;
   Run(L"Install PKG", false, [&] {
     std::vector<std::string> paths;
     for (const auto& e : entries) paths.push_back(e.path);
@@ -1692,18 +1692,18 @@ void Panel::InstallPkgs(const std::vector<ps5::ListEntry>& entries) {
     try {
       for (uint64_t id : ids) ReportTask(WaitTask(id, L"Installing package", false), L"Install PKG");
     } catch (const ps5::CancelledError&) {
-      far::ShowInfo(L"Install PKG", L"The installation continues on the console.");
+      fui::ShowInfo(L"Install PKG", L"The installation continues on the console.");
       return;
     }
-    far::ShowInfo(L"Install PKG", L"Done. Check the console's notifications for the result.");
+    fui::ShowInfo(L"Install PKG", L"Done. Check the console's notifications for the result.");
   });
 }
 
 void Panel::LaunchElf(const ps5::ListEntry& entry) {
-  if (!far::Confirm(L"Launch ELF", L"Send " + codec::RawToDisplay(entry.name) + L" to the ELF loader?", L"&Launch"))
+  if (!fui::Confirm(L"Launch ELF", L"Send " + codec::RawToDisplay(entry.name) + L" to the ELF loader?", L"&Launch"))
     return;
   if (Run(L"Launch ELF", false, [&] { Client().LaunchElf(entry.path); }))
-    far::ShowInfo(L"Launch ELF", L"The payload was sent to the ELF loader.");
+    fui::ShowInfo(L"Launch ELF", L"The payload was sent to the ELF loader.");
 }
 
 void Panel::ExtractDialog(const std::vector<ps5::ListEntry>& entries) {
@@ -1712,18 +1712,18 @@ void Panel::ExtractDialog(const std::vector<ps5::ListEntry>& entries) {
                                           : std::to_wstring(entries.size()) + L" archives";
   std::wstring label = L"Extract " + what + L" to:";
   std::vector<FarDialogItem> items{
-      far::Item(DI_DOUBLEBOX, 3, 1, 66, 11, L"Extract on the console"),
-      far::Item(DI_TEXT, 5, 2, 0, 2, label.c_str()),
-      far::Item(DI_EDIT, 5, 3, 64, 3, dest.c_str(), DIF_HISTORY, 0, L"PS5FM.ExtractTarget"),
-      far::Item(DI_CHECKBOX, 5, 4, 0, 4, L"Extract each archive into its own &folder", DIF_NONE, 1),
-      far::Item(DI_CHECKBOX, 5, 5, 0, 5, L"&Overwrite existing files", DIF_NONE, 0),
-      far::Item(DI_TEXT, 5, 6, 0, 6, L"&Password (if encrypted):"),
-      far::Item(DI_PSWEDIT, 5, 7, 64, 7, L""),
-      far::Item(DI_TEXT, -1, 9, 0, 9, L"", DIF_SEPARATOR),
-      far::Item(DI_BUTTON, 0, 10, 0, 10, L"E&xtract", DIF_CENTERGROUP | DIF_DEFAULTBUTTON),
-      far::Item(DI_BUTTON, 0, 10, 0, 10, L"Cancel", DIF_CENTERGROUP),
+      fui::Item(DI_DOUBLEBOX, 3, 1, 66, 11, L"Extract on the console"),
+      fui::Item(DI_TEXT, 5, 2, 0, 2, label.c_str()),
+      fui::Item(DI_EDIT, 5, 3, 64, 3, dest.c_str(), DIF_HISTORY, 0, L"PS5FM.ExtractTarget"),
+      fui::Item(DI_CHECKBOX, 5, 4, 0, 4, L"Extract each archive into its own &folder", DIF_NONE, 1),
+      fui::Item(DI_CHECKBOX, 5, 5, 0, 5, L"&Overwrite existing files", DIF_NONE, 0),
+      fui::Item(DI_TEXT, 5, 6, 0, 6, L"&Password (if encrypted):"),
+      fui::Item(DI_PSWEDIT, 5, 7, 64, 7, L""),
+      fui::Item(DI_TEXT, -1, 9, 0, 9, L"", DIF_SEPARATOR),
+      fui::Item(DI_BUTTON, 0, 10, 0, 10, L"E&xtract", DIF_CENTERGROUP | DIF_DEFAULTBUTTON),
+      fui::Item(DI_BUTTON, 0, 10, 0, 10, L"Cancel", DIF_CENTERGROUP),
   };
-  far::DialogResult r = far::RunDialog(ExtractDialogGuid, 70, 13, nullptr, items);
+  fui::DialogResult r = fui::RunDialog(ExtractDialogGuid, 70, 13, nullptr, items);
   if (r.exitCode != 8) return;
   std::wstring target = Trim(r.texts[2]);
   if (target.empty()) return;
@@ -1731,7 +1731,7 @@ void Panel::ExtractDialog(const std::vector<ps5::ListEntry>& entries) {
   Run(L"Extract", false, [&] {
     std::vector<std::string> paths;
     for (const auto& e : entries) paths.push_back(e.path);
-    uint64_t id = Client().Extract(paths, rawDest, r.checks[3], r.checks[4], far::U(r.texts[6]));
+    uint64_t id = Client().Extract(paths, rawDest, r.checks[3], r.checks[4], fui::U(r.texts[6]));
     ReportTask(WaitTask(id, L"Extract"), L"Extract");
   });
   Refresh(true);
@@ -1744,19 +1744,19 @@ void Panel::ChmodDialog(const std::vector<ps5::ListEntry>& entries) {
                                           : std::to_wstring(entries.size()) + L" items";
   std::wstring label = L"Permissions for " + what + L" (octal, e.g. 0755):";
   std::vector<FarDialogItem> items{
-      far::Item(DI_DOUBLEBOX, 3, 1, 60, 8, L"Change permissions"),
-      far::Item(DI_TEXT, 5, 2, 0, 2, label.c_str()),
-      far::Item(DI_EDIT, 5, 3, 12, 3, mode.c_str()),
-      far::Item(DI_CHECKBOX, 5, 4, 0, 4, L"Apply to folder contents (&recursive)", anyDir ? DIF_NONE : DIF_DISABLE, 0),
-      far::Item(DI_TEXT, -1, 6, 0, 6, L"", DIF_SEPARATOR),
-      far::Item(DI_BUTTON, 0, 7, 0, 7, L"OK", DIF_CENTERGROUP | DIF_DEFAULTBUTTON),
-      far::Item(DI_BUTTON, 0, 7, 0, 7, L"Cancel", DIF_CENTERGROUP),
+      fui::Item(DI_DOUBLEBOX, 3, 1, 60, 8, L"Change permissions"),
+      fui::Item(DI_TEXT, 5, 2, 0, 2, label.c_str()),
+      fui::Item(DI_EDIT, 5, 3, 12, 3, mode.c_str()),
+      fui::Item(DI_CHECKBOX, 5, 4, 0, 4, L"Apply to folder contents (&recursive)", anyDir ? DIF_NONE : DIF_DISABLE, 0),
+      fui::Item(DI_TEXT, -1, 6, 0, 6, L"", DIF_SEPARATOR),
+      fui::Item(DI_BUTTON, 0, 7, 0, 7, L"OK", DIF_CENTERGROUP | DIF_DEFAULTBUTTON),
+      fui::Item(DI_BUTTON, 0, 7, 0, 7, L"Cancel", DIF_CENTERGROUP),
   };
-  far::DialogResult r = far::RunDialog(ChmodDialogGuid, 64, 10, nullptr, items);
+  fui::DialogResult r = fui::RunDialog(ChmodDialogGuid, 64, 10, nullptr, items);
   if (r.exitCode != 5) return;
   uint32_t value = 0;
-  if (!ps5::ParseOctalMode(far::U(Trim(r.texts[2])), value)) {
-    far::ShowError(L"Permissions", L"Enter the mode as three or four octal digits, like 0755.");
+  if (!ps5::ParseOctalMode(fui::U(Trim(r.texts[2])), value)) {
+    fui::ShowError(L"Permissions", L"Enter the mode as three or four octal digits, like 0755.");
     return;
   }
   Run(L"Permissions", false, [&] {
@@ -1775,10 +1775,10 @@ void Panel::ShowSpace() {
   for (const auto& s : spaces) {
     std::wstring line = codec::RawToDisplay(s.path);
     if (line.size() < 24) line.append(24 - line.size(), L' ');
-    line += far::FormatSize(s.free) + L" free of " + far::FormatSize(s.total);
+    line += fui::FormatSize(s.free) + L" free of " + fui::FormatSize(s.total);
     lines.push_back(line);
   }
-  far::Message(FMSG_LEFTALIGN, lines, {L"OK"}, MessageGuid);
+  fui::Message(FMSG_LEFTALIGN, lines, {L"OK"}, MessageGuid);
 }
 
 void Panel::ShowRunningTask() {
@@ -1786,7 +1786,7 @@ void Panel::ShowRunningTask() {
   bool found = false;
   if (!Run(L"Running task", false, [&] { found = ps5::FindActiveTask(Client(), task); })) return;
   if (!found) {
-    far::ShowInfo(L"Running task", L"No task is running on the console.");
+    fui::ShowInfo(L"Running task", L"No task is running on the console.");
     return;
   }
   HandleBusy(L"Running task");
@@ -1794,7 +1794,7 @@ void Panel::ShowRunningTask() {
 }
 
 void Panel::StopPayload() {
-  if (!far::Confirm(L"Stop the payload",
+  if (!fui::Confirm(L"Stop the payload",
                     L"Stop the web file manager payload on " + session_->host.name +
                         L"?\nYou will need to load it again to reconnect.",
                     L"&Stop", true)) {

@@ -15,7 +15,7 @@
 extern PluginStartupInfo PsInfo;
 extern FarStandardFunctions FSF;
 
-namespace far {
+namespace fui {
 
 std::wstring W(std::string_view utf8);  // UTF-8 -> UTF-16
 std::string U(std::wstring_view wide);  // UTF-16 -> UTF-8
@@ -75,4 +75,4 @@ FILETIME UnixToFileTime(int64_t unixTime);
 void TaskbarProgress(uint64_t done, uint64_t total);
 void TaskbarClear();
 
-}  // namespace far
+}  // namespace fui
