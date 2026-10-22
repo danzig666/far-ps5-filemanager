@@ -571,7 +571,8 @@ Per-host settings are under the Hosts level (5.2).
 - GitHub Actions (`.github/workflows/build.yml`): unit tests on Linux,
   integration tests against the payload built for Linux, the MSVC x64 build
   with an exports and runtime-dependency check, and a zip artifact. Pushing a
-  `v*` tag creates a GitHub release with the zip.
+  `v*` tag, or running the workflow manually with `release_tag` set, creates a
+  GitHub release with the zip.
 
 ### Tests
 
