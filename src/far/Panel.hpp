@@ -22,6 +22,7 @@ struct Session {
   HostConfig host;
   std::unique_ptr<ps5::Ps5Client> client;
   std::set<std::string> smbUnlocked;  // SMB roots unlocked in this payload session
+  uint64_t dismissedTask = 0;         // task whose live view the user closed with Esc
 };
 
 class Panel {
@@ -82,10 +83,13 @@ private:
   // Runs `fn`, reporting errors in a message box unless `silent`. Returns
   // false on any error or cancellation.
   bool Run(const std::wstring& title, bool silent, const std::function<void()>& fn);
-  // Live view of a task someone else started. Returns true when the task
-  // has ended (so the caller may retry), false if the user stopped watching.
-  bool WatchBusy(const std::wstring& title);
-  ps5::TaskResult WaitTask(uint64_t id, const std::wstring& title, bool cancellable = true);
+  // Live view of the task that is keeping the console busy. Returns true when
+  // it has ended (so the caller may retry), false if the user closed the view.
+  bool WatchBusy(const std::wstring& title, bool explicitRequest = false);
+  // Live view of a console task. Esc closes the view and leaves the task
+  // running (throws CancelledError); F8 asks before stopping the task.
+  ps5::TaskResult WatchTask(uint64_t id, const std::wstring& title, const ps5::TaskInfo* initial);
+  ps5::TaskResult WaitTask(uint64_t id, const std::wstring& title) { return WatchTask(id, title, nullptr); }
   bool ReportTask(const ps5::TaskResult& result, const std::wstring& title);
 
   // Navigation.
@@ -137,6 +141,7 @@ private:
   bool fromRoot_ = false;
   ps5::Listing listing_;
   bool listingFresh_ = false;
+  bool inFindData_ = false;  // panel refresh in progress
   std::vector<std::wstring> names_;  // display names, parallel to listing_.entries
   std::vector<bool> lossy_;
   std::map<std::wstring, size_t> byName_;

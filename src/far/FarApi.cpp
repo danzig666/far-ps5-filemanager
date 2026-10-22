@@ -146,20 +146,21 @@ DialogResult RunDialog(const GUID& id, intptr_t width, intptr_t height, const wc
   return result;
 }
 
-bool EscPressed() {
+int PollKey() {
   HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
-  bool escape = false;
+  int key = 0;
   DWORD count = 0;
   while (GetNumberOfConsoleInputEvents(input, &count) && count) {
     INPUT_RECORD record;
     DWORD read = 0;
     if (!ReadConsoleInputW(input, &record, 1, &read) || !read) break;
-    if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown &&
-        record.Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE) {
-      escape = true;
-    }
+    if (record.EventType != KEY_EVENT || !record.Event.KeyEvent.bKeyDown || key) continue;
+    WORD vk = record.Event.KeyEvent.wVirtualKeyCode;
+    DWORD mods = record.Event.KeyEvent.dwControlKeyState &
+                 (SHIFT_PRESSED | LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED | LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED);
+    if (vk == VK_ESCAPE || (vk == VK_F8 && !mods)) key = vk;
   }
-  return escape;
+  return key;
 }
 
 std::wstring LongPath(const std::wstring& path) {

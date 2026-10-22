@@ -43,7 +43,8 @@ std::wstring OpTitle(const std::string& op) {
 
 }  // namespace
 
-Progress::Progress(std::wstring title, bool visible) : title_(std::move(title)), visible_(visible) {
+Progress::Progress(std::wstring title, bool visible)
+    : title_(std::move(title)), visible_(visible), hint_(L"Esc or F8: stop the transfer (you will be asked first)") {
   if (visible_) screen_ = PsInfo.SaveScreen(0, 0, -1, -1);
   started_ = GetTickCount64();
 }
@@ -97,11 +98,14 @@ void Progress::ServerTask(const ps5::TaskInfo& task) {
 }
 
 bool Progress::CheckCancel() {
-  if (!fui::EscPressed()) return false;
-  bool cancel = fui::Message(FMSG_WARNING, {title_, L"Cancel the operation?"}, {L"Yes", L"No"},
-                             MessageGuid) == 0;
+  if (!fui::PollKey()) return false;
+  // "Continue" is the first, default button: Enter or Esc keeps going.
+  bool stop = fui::Message(FMSG_WARNING,
+                           {title_, L"Stop the transfer?", L"The file being copied right now will not be finished.",
+                            L"Files that are already finished are kept."},
+                           {L"&Continue", L"&Stop the transfer"}, MessageGuid) == 1;
   Draw(true);
-  return cancel;
+  return stop;
 }
 
 void Progress::ThrowIfCancelled() {

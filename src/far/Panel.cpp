@@ -229,7 +229,7 @@ bool Panel::Run(const std::wstring& title, bool silent, const std::function<void
   }
 }
 
-bool Panel::WatchBusy(const std::wstring& title) {
+bool Panel::WatchBusy(const std::wstring& title, bool explicitRequest) {
   ps5::TaskInfo task;
   bool found = false;
   try {
@@ -237,65 +237,73 @@ bool Panel::WatchBusy(const std::wstring& title) {
   } catch (const std::exception&) {
   }
   if (!found) return true;  // it ended in the meantime
-
-  bool cancellable = task.op != "pkg_install";
-  bool cancelSent = false;
-  Progress progress(title);
-  progress.SetHint(cancellable ? L"Another task is running on the console.  Esc: cancel it or stop watching"
-                               : L"A package is installing on the console.  Esc: stop watching");
-  progress.ServerTask(task);
+  // Don't pop the view up again on every panel refresh after the user closed it.
+  if (!explicitRequest && inFindData_ && session_->dismissedTask == task.id) return false;
   try {
-    ps5::WaitForTask(
-        Client(), task.id,
-        [&](const ps5::TaskInfo* t) {
-          if (t) progress.ServerTask(*t);
-          if (!fui::EscPressed()) return true;
-          std::vector<std::wstring> buttons{L"&Keep waiting"};
-          if (cancellable && !cancelSent) buttons.push_back(L"&Cancel the task");
-          buttons.push_back(L"&Stop watching");
-          intptr_t choice = fui::Message(
-              FMSG_WARNING,
-              {title, L"The console is busy with another task.",
-               L"The panel opens automatically when it finishes."},
-              buttons, MessageGuid);
-          progress.Draw(true);
-          if (choice <= 0) return true;
-          if (buttons[static_cast<size_t>(choice)] == L"&Stop watching") throw ps5::CancelledError();
-          cancelSent = true;
-          try {
-            Client().Cancel(task.id);
-          } catch (const ps5::ApiError&) {
-          }
-          if (task.op == "upload") {
-            // An upload only ends once its uploader calls finish.
-            try {
-              Client().UploadFinish(task.id);
-            } catch (const ps5::ApiError&) {
-            }
-          }
-          return true;
-        },
-        SleepMs, 500);
-  } catch (const ps5::CancelledError&) {
-    return false;
+    WatchTask(task.id, title, &task);
   } catch (const std::exception&) {
     return false;
   }
   return true;
 }
 
-ps5::TaskResult Panel::WaitTask(uint64_t id, const std::wstring& title, bool cancellable) {
+ps5::TaskResult Panel::WatchTask(uint64_t id, const std::wstring& title, const ps5::TaskInfo* initial) {
   Progress progress(title);
-  progress.Status(L"Waiting for the console...");
+  std::string op = initial ? initial->op : std::string();
+  auto setHint = [&] {
+    progress.SetHint(op == "pkg_install" ? L"Esc: close this window (the installation keeps running)"
+                                         : L"Esc: close this window (the task keeps running)    F8: stop the task");
+  };
+  setHint();
+  if (initial) {
+    progress.ServerTask(*initial);
+  } else {
+    progress.Status(L"Waiting for the console...");
+  }
+  bool stopSent = false;
   return ps5::WaitForTask(
       Client(), id,
-      [&](const ps5::TaskInfo* task) {
-        if (task) progress.ServerTask(*task);
-        if (!progress.CheckCancel()) return true;
-        if (!cancellable) throw ps5::CancelledError();  // stop waiting; the task goes on
-        return false;
+      [&](const ps5::TaskInfo* t) {
+        if (t) {
+          if (t->op != op) {
+            op = t->op;
+            setHint();
+          }
+          progress.ServerTask(*t);
+        }
+        int key = fui::PollKey();
+        if (key == VK_ESCAPE) {
+          session_->dismissedTask = id;
+          throw ps5::CancelledError();  // close the view; the task keeps running
+        }
+        if (key != VK_F8 || stopSent) return true;
+        if (op == "pkg_install") {
+          fui::ShowInfo(title, L"A package installation cannot be stopped.");
+          progress.Draw(true);
+          return true;
+        }
+        // "Keep running" is the first, default button: Enter or Esc keeps the task.
+        intptr_t choice = fui::Message(FMSG_WARNING,
+                                       {L"Stop the task", L"Stop this task on the console?",
+                                        L"Work already done (copied or extracted files) is not undone."},
+                                       {L"&Keep running", L"&Stop the task"}, MessageGuid);
+        progress.Draw(true);
+        if (choice != 1) return true;
+        stopSent = true;
+        try {
+          Client().Cancel(id);
+        } catch (const ps5::ApiError&) {
+        }
+        if (op == "upload") {
+          // An upload only ends once its uploader calls finish.
+          try {
+            Client().UploadFinish(id);
+          } catch (const ps5::ApiError&) {
+          }
+        }
+        return true;
       },
-      SleepMs, 300);
+      SleepMs, 500);
 }
 
 bool Panel::ReportTask(const ps5::TaskResult& result, const std::wstring& title) {
@@ -705,11 +713,13 @@ intptr_t Panel::GetFindData(GetFindDataInfo* info) {
     }
     case Level::Dir: {
       if (!listingFresh_) {
+        inFindData_ = true;
         bool ok = Run(kTitle, silent, [&] {
           ps5::Listing listing = Client().List(cur_);
           listing_ = std::move(listing);
           BuildNames();
         });
+        inFindData_ = false;
         if (!ok && (info->OpMode & OPM_FIND)) return FALSE;
       }
       listingFresh_ = false;
@@ -1709,7 +1719,7 @@ void Panel::InstallPkgs(const std::vector<ps5::ListEntry>& entries) {
     for (const auto& e : entries) paths.push_back(e.path);
     std::vector<uint64_t> ids = Client().InstallPkg(paths);
     try {
-      for (uint64_t id : ids) ReportTask(WaitTask(id, L"Installing package", false), L"Install PKG");
+      for (uint64_t id : ids) ReportTask(WaitTask(id, L"Installing package"), L"Install PKG");
     } catch (const ps5::CancelledError&) {
       fui::ShowInfo(L"Install PKG", L"The installation continues on the console.");
       return;
@@ -1808,7 +1818,7 @@ void Panel::ShowRunningTask() {
     fui::ShowInfo(L"Running task", L"No task is running on the console.");
     return;
   }
-  WatchBusy(L"Running task");
+  WatchBusy(L"Running task", true);
   Refresh(true);
 }
 

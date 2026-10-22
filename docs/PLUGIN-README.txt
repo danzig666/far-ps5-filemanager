@@ -55,7 +55,13 @@ Notes
   copy, upload, delete or extract is running. The plugin shows the task live
   (current file, size done, speed, elapsed and remaining time). If the task
   was started elsewhere (the web UI, another panel), the panel opens by
-  itself when it finishes; Esc lets you cancel the task or stop watching.
+  itself when it finishes.
+  - Tasks running on the console (copy/move on the console, delete,
+    extract, chmod, PKG install): Esc only closes the window, the task keeps
+    running. F8 stops the task, after a confirmation whose default is
+    "Keep running". Shift+F1 > Running task reopens the window.
+  - Transfers between the PC and the PS5: Esc or F8 asks "Stop the
+    transfer?" with "Continue" as the default button.
 - Downloads go to "<name>.ps5part" and are renamed when complete. If a file
   already exists and is smaller, "Resume" continues it.
 - File names that are not UTF-8 are shown using the console's fallback code

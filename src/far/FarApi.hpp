@@ -56,9 +56,9 @@ struct DialogResult {
 DialogResult RunDialog(const GUID& id, intptr_t width, intptr_t height, const wchar_t* help,
                        std::vector<FarDialogItem>& items);
 
-// True if Esc is waiting in the console input. Other pending input is
-// consumed as well, like Far's own copy progress does.
-bool EscPressed();
+// Returns VK_ESCAPE or VK_F8 if one was pressed since the last call, else 0.
+// Other pending input is consumed, like Far's own copy progress does.
+int PollKey();
 
 // Prefixes \\?\ so local paths longer than MAX_PATH work.
 std::wstring LongPath(const std::wstring& path);
