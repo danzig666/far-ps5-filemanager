@@ -11,7 +11,7 @@ panel keys.
 |---|---|
 | Host | Far Manager 3, build **3.0.6638 or newer**, **Windows x64** only |
 | Language | C++20, Far 3 SDK (`plugin.hpp`), WinHTTP, no other runtime dependencies |
-| Toolchain | Visual Studio 2022 (MSVC v143), static CRT (`/MT`), one `PS5FM.dll` |
+| Toolchain | CMake + MSVC (built on GitHub Actions `windows-latest`), static CRT (`/MT`), one `PS5FM.dll` |
 | Payload | ps5-web-file-manager **v1.12** (commit `246eb6f`), port 8888 by default |
 
 Everything about the payload in this document comes from reading its source at
@@ -75,29 +75,31 @@ notes are the contract this plugin implements.
 ├──────────────────────────────────────────────────────────────┤
 │ Config           host list (name, address, port) in Far's    │
 │                  settings storage (PSL_ROAMING)              │
-│ Lang             PS5FMEng.lng / PS5FMRus.lng message tables  │
+│ (UI strings are English literals; no .lng files in v1)      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Proposed source layout:
+Source layout:
 
 ```
-src/
-  Plugin.cpp        Far exports, GUIDs, version check
-  Panel.cpp/.hpp    panel state, GetFindData/SetDirectory/ProcessPanelInput
-  Ops/*.cpp         one file per operation
-  Progress.cpp      progress and confirmation dialogs
-  Ps5Client.cpp/.hpp
-  PathCodec.cpp/.hpp
-  Http.cpp/.hpp     WinHTTP wrapper
-  Config.cpp/.hpp
-  Guids.hpp
-  version.hpp
-lng/PS5FMEng.lng, PS5FMRus.lng
-far-sdk/            plugin.hpp + farcolor.hpp, vendored from FarGroup/FarManager
-third_party/json/   header-only JSON parser (vendored)
-tests/              unit tests and the integration harness (section 9)
-PS5FM.sln, PS5FM.vcxproj
+src/core/           platform-neutral, built and tested on Linux too
+  Json.*            small JSON DOM parser
+  Text.*            UTF-8/UTF-16, percent-encoding, formatting
+  PathCodec.*       payload byte-token <-> raw bytes <-> display names
+  Http.hpp          transport interface
+  Ps5Client.*       typed payload API
+  Operations.*      task polling, remote tree walk, error texts
+src/far/            Windows-only Far plugin
+  Plugin.cpp        exported *W functions
+  Panel.*           panel state, navigation and every operation
+  Progress.*        progress window
+  FarApi.*          message/menu/dialog helpers
+  Config.*          hosts and options in Far's settings
+  WinHttpTransport.*
+  PS5FM.def/.rc     exports and version resource
+far-sdk/            plugin.hpp + farcolor.hpp from FarGroup/FarManager (ci/v3.0.6638.4754)
+tests/              unit tests, integration tests, POSIX HTTP transport
+CMakeLists.txt
 ```
 
 ### Threading
@@ -227,12 +229,10 @@ Rules that follow from this:
 
 The payload does not expose its version over HTTP: `VERSION_TAG` only goes to
 stdout and the on-console notification. So the plugin checks capabilities
-instead. On connect it calls `/api/space` and `/api/list?path=/` and checks
-that the fields it relies on are present (`entries[].path`, `type`, `mode`,
-`mtime`). An unknown endpoint returns `404` with `error_code: "unknown_api"`,
-which is how later feature probes tell "not supported" apart from real
-failures. If a check fails, the plugin shows a one-time warning ("this payload
-version is untested; the plugin targets v1.12") and continues.
+instead. Connecting calls `/api/space`, so an unreachable or incompatible
+server fails at connect time. An unknown endpoint returns `404` with
+`error_code: "unknown_api"`, which the plugin reports as "this payload version
+does not support the operation". CI pins the integration tests to v1.12.
 
 Worth upstreaming: a tiny `GET /api/version` returning
 `{"ok":true,"version":"v1.12"}`.
@@ -498,8 +498,8 @@ the config.
 ## 6. HTTP layer
 
 - One `WinHttpOpen` session for the plugin, with
-  `WINHTTP_ACCESS_TYPE_NO_PROXY` by default (the console is on the LAN; a system
-  proxy would break it). A per-host option enables the system proxy.
+  `WINHTTP_ACCESS_TYPE_NO_PROXY` (the console is on the LAN; a system proxy
+  would break it).
 - One `WinHttpConnect` handle per host, reused. Keep-alive is on, but every
   request is self-contained, so a dropped connection costs only a retry.
 - Requests:
@@ -524,7 +524,7 @@ All errors surface through one `ShowError(op, item, error)` using
 `Info.Message` with `FMSG_WARNING`, plus Retry / Skip / Skip all / Cancel
 during multi-item operations.
 
-`error_code` → message (in `.lng` files, so they can be translated):
+`error_code` → message (`DescribeApiError` in `src/core/Operations.cpp`):
 
 | code | message |
 |---|---|
@@ -563,19 +563,19 @@ Per-host settings are under the Hosts level (5.2).
 
 ### Build
 
-- `PS5FM.sln` with one `x64` project, `Debug`/`Release`, `/std:c++20`, `/MT`,
-  `/W4 /WX`, linked against `winhttp.lib` only.
-- Output `PS5FM.dll` plus the `.lng` files. To install, copy them to
-  `%FARHOME%\Plugins\PS5FM\`.
+- CMake (`cmake -S . -B build -A x64 && cmake --build build --config Release`),
+  `/std:c++20`, `/MT`, `/W4`, linked against `winhttp.lib` only.
+- Output `PS5FM.dll`. To install, copy it to `%FARHOME%\Plugins\PS5FM\`.
 - The Far SDK headers are vendored from FarGroup/FarManager at a tag
   >= 3.0.6638 so the build is reproducible.
-- GitHub Actions on `windows-latest`: `msbuild /p:Configuration=Release /p:Platform=x64`,
-  run unit tests, upload a zip artifact. Tagged builds attach the zip to a
-  release.
+- GitHub Actions (`.github/workflows/build.yml`): unit tests on Linux,
+  integration tests against the payload built for Linux, the MSVC x64 build
+  with an exports and runtime-dependency check, and a zip artifact. Pushing a
+  `v*` tag creates a GitHub release with the zip.
 
 ### Tests
 
-1. **Unit tests** (doctest, no Far, no network): `PathCodec` round trips (ASCII,
+1. **Unit tests** (a tiny built-in harness, no Far, no network): `PathCodec` round trips (ASCII,
    Latin-1 `café`, CJK, invalid UTF-8 bytes, GBK names), percent-encoding,
    JSON parsing of recorded `/api/list` and `/api/tasks` responses, Unix time →
    FILETIME, and mode → attribute mapping.
@@ -586,8 +586,8 @@ Per-host settings are under the Hosts level (5.2).
    with Range, copy, move, delete, rename, mkdir, cancel, and the `active_task`
    conflict. This runs `Ps5Client` without Far. To make that possible,
    `Ps5Client` and `PathCodec` have no Far dependencies, and `Http` sits behind
-   an interface (a WinHTTP implementation on Windows and a small libcurl one for
-   the Linux test run).
+   an interface (a WinHTTP implementation on Windows and a small POSIX-socket
+   one for the Linux test run).
 3. **Manual checklist on a console** (in `docs/TESTING.md`): USB ↔ internal
    copy of a 20 GB folder, cancel mid-copy, PKG install, non-UTF-8 file names,
    payload restarted mid-transfer, Wi-Fi drop.
@@ -601,7 +601,7 @@ Per-host settings are under the Hosts level (5.2).
 | 0 | Skeleton: Far exports, hosts level, config, `Http` + `Ps5Client.List`, `PathCodec` + unit tests | ~600 LOC |
 | 1 (MVP) | Browse, F5/F6 both directions with progress, F7, F8, Shift+F6, F3/F4, task polling and `active_task` recovery | ~1,500 LOC total |
 | 2 | On-console copy/move intercept, actions menu (PKG, ELF, extract, chmod, space), resume on download, CI with payload integration tests | +800 LOC |
-| 3 | SMB volumes (`/api/smb/connect`, password prompt, saved in Far's settings with DPAPI), symlink display, PS5↔PS5 across two consoles via streaming instead of temp dir | +500 LOC |
+| 3 | SMB volumes (`/api/smb/connect`, password prompt, kept for the Far session only). Not done: storing SMB passwords, following symlinked folders, PS5↔PS5 across two consoles without Far's temp-dir round trip | +300 LOC |
 
 ---
 

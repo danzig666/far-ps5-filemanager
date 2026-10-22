@@ -8,7 +8,7 @@ payload's HTTP API.
 - Target: Far Manager **3.0.6638+**, **Windows x64**
 - Payload: ps5-web-file-manager **v1.12**
 
-Status: design stage. See [docs/DESIGN.md](docs/DESIGN.md).
+Download the latest build from the [Releases](../../releases) page. Usage: [docs/PLUGIN-README.txt](docs/PLUGIN-README.txt). Design: [docs/DESIGN.md](docs/DESIGN.md).
 
 Highlights:
 

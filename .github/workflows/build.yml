@@ -1,0 +1,117 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PAYLOAD_TAG: v1.12
+
+jobs:
+  core-tests:
+    name: Core unit tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-Werror
+      - name: Build
+        run: cmake --build build -j
+      - name: Unit tests
+        run: ./build/unit_tests
+
+  integration:
+    name: Integration tests against the payload (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install payload build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libmicrohttpd-dev
+      - name: Build ps5-web-file-manager ${{ env.PAYLOAD_TAG }} for Linux
+        run: |
+          git clone --depth 1 --branch "$PAYLOAD_TAG" --recurse-submodules --shallow-submodules \
+            https://github.com/owendswang/ps5-web-file-manager payload
+          make -C payload linux
+      - name: Build tests
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j
+      - name: Run integration tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/wfm-config" "$RUNNER_TEMP/scratch"
+          WFM_CONFIG_DIR="$RUNNER_TEMP/wfm-config" ./payload/web-file-mgr-linux > "$RUNNER_TEMP/payload.log" 2>&1 &
+          for i in $(seq 1 100); do
+            curl -sf http://127.0.0.1:8888/api/space > /dev/null && break
+            sleep 0.2
+          done
+          ./build/integration_tests 8888 "$RUNNER_TEMP/scratch"
+      - name: Payload log
+        if: always()
+        run: cat "$RUNNER_TEMP/payload.log" || true
+
+  windows:
+    name: Far plugin (Windows x64, MSVC)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Unit tests
+        run: build\Release\unit_tests.exe
+      - name: Check exports
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -property installationPath
+          $dumpbin = Get-ChildItem -Path "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe |
+            Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          $exports = & $dumpbin.FullName /exports build\Release\PS5FM.dll | Out-String
+          Write-Output $exports
+          foreach ($name in 'GetGlobalInfoW','SetStartupInfoW','OpenW','GetFindDataW','PutFilesW','GetFilesW') {
+            if ($exports -notmatch "\b$name\b") { throw "missing export $name" }
+          }
+          $deps = & $dumpbin.FullName /dependents build\Release\PS5FM.dll | Out-String
+          Write-Output $deps
+          if ($deps -match 'VCRUNTIME|MSVCP') { throw "the DLL depends on the VC++ runtime" }
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME } else { "dev-$($env:GITHUB_SHA.Substring(0,7))" }
+          New-Item -ItemType Directory -Force dist\PS5FM | Out-Null
+          Copy-Item build\Release\PS5FM.dll dist\PS5FM\
+          Copy-Item docs\PLUGIN-README.txt dist\PS5FM\README.txt
+          Compress-Archive -Path dist\PS5FM -DestinationPath "dist\PS5FM-$version-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PS5FM-x64
+          path: dist/*.zip
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [core-tests, integration, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: PS5FM-x64
+          path: dist
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "PS5 File Manager $GITHUB_REF_NAME" \
+            --notes-file docs/RELEASE_NOTES.md

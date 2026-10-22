@@ -1,0 +1,17 @@
+LIBRARY PS5FM
+EXPORTS
+  GetGlobalInfoW
+  SetStartupInfoW
+  GetPluginInfoW
+  OpenW
+  ClosePanelW
+  GetOpenPanelInfoW
+  GetFindDataW
+  FreeFindDataW
+  SetDirectoryW
+  GetFilesW
+  PutFilesW
+  DeleteFilesW
+  MakeDirectoryW
+  ProcessPanelInputW
+  ConfigureW
