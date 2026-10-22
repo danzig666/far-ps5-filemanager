@@ -82,7 +82,9 @@ private:
   // Runs `fn`, reporting errors in a message box unless `silent`. Returns
   // false on any error or cancellation.
   bool Run(const std::wstring& title, bool silent, const std::function<void()>& fn);
-  void HandleBusy(const std::wstring& title);
+  // Live view of a task someone else started. Returns true when the task
+  // has ended (so the caller may retry), false if the user stopped watching.
+  bool WatchBusy(const std::wstring& title);
   ps5::TaskResult WaitTask(uint64_t id, const std::wstring& title, bool cancellable = true);
   bool ReportTask(const ps5::TaskResult& result, const std::wstring& title);
 

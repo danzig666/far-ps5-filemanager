@@ -286,6 +286,7 @@ std::vector<TaskInfo> Ps5Client::Tasks() {
     t.done = item["done"].asUInt();
     t.speed = item["speed"].asUInt();
     t.eta = item["eta"].asUInt();
+    t.elapsed = item["total_elapsed"].asUInt();
     t.cancelRequested = item["cancel_requested"].asBool();
     tasks.push_back(std::move(t));
   }

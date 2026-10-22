@@ -79,6 +79,7 @@ struct TaskInfo {
   uint64_t done = 0;
   uint64_t speed = 0;
   uint64_t eta = 0;
+  uint64_t elapsed = 0;  // seconds since the task was created
   bool cancelRequested = false;
 
   bool active() const { return state == "queued" || state == "running"; }

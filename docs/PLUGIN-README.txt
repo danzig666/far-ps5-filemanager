@@ -52,9 +52,10 @@ Inside a console:
 Notes
 -----
 - The payload runs one task at a time and refuses to list folders while a
-  copy, upload or delete is running. The plugin waits on a progress dialog;
-  Esc cancels. If something else (the web UI) is busy, you are offered to
-  wait for it or cancel it.
+  copy, upload, delete or extract is running. The plugin shows the task live
+  (current file, size done, speed, elapsed and remaining time). If the task
+  was started elsewhere (the web UI, another panel), the panel opens by
+  itself when it finishes; Esc lets you cancel the task or stop watching.
 - Downloads go to "<name>.ps5part" and are renamed when complete. If a file
   already exists and is smaller, "Resume" continues it.
 - File names that are not UTF-8 are shown using the console's fallback code

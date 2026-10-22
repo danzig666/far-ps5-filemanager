@@ -202,67 +202,86 @@ void Panel::ApplyCodePage() {
 // Error handling and tasks
 
 bool Panel::Run(const std::wstring& title, bool silent, const std::function<void()>& fn) {
-  try {
-    fn();
-    return true;
-  } catch (const ps5::CancelledError&) {
-  } catch (const ps5::ApiError& e) {
-    if (!silent) {
-      if (e.code() == "active_task") {
-        HandleBusy(title);
-      } else {
-        fui::ShowError(title, W(ps5::DescribeApiError(e)));
+  for (int attempt = 0;; ++attempt) {
+    try {
+      fn();
+      return true;
+    } catch (const ps5::CancelledError&) {
+    } catch (const ps5::ApiError& e) {
+      if (!silent) {
+        if (e.code() == "active_task") {
+          // Show the other task live; when it ends, try again.
+          if (WatchBusy(title) && attempt < 3) continue;
+        } else {
+          fui::ShowError(title, W(ps5::DescribeApiError(e)));
+        }
       }
+    } catch (const ps5::NetError& e) {
+      if (!silent) {
+        std::wstring where = session_ ? session_->host.Endpoint() : L"the console";
+        fui::ShowError(title, L"Cannot reach " + where + L":\n" + W(e.what()) +
+                                  L"\nIs the payload running on the console?");
+      }
+    } catch (const std::exception& e) {
+      if (!silent) fui::ShowError(title, W(e.what()));
     }
-  } catch (const ps5::NetError& e) {
-    if (!silent) {
-      std::wstring where = session_ ? session_->host.Endpoint() : L"the console";
-      fui::ShowError(title, L"Cannot reach " + where + L":\n" + W(e.what()) +
-                                L"\nIs the payload running on the console?");
-    }
-  } catch (const std::exception& e) {
-    if (!silent) fui::ShowError(title, W(e.what()));
+    return false;
   }
-  return false;
 }
 
-void Panel::HandleBusy(const std::wstring& title) {
+bool Panel::WatchBusy(const std::wstring& title) {
   ps5::TaskInfo task;
   bool found = false;
   try {
     found = ps5::FindActiveTask(Client(), task);
   } catch (const std::exception&) {
   }
-  if (!found) {
-    fui::ShowError(title, L"The console is busy with another task. Try again in a moment.");
-    return;
-  }
-  unsigned percent = task.total ? static_cast<unsigned>(task.done * 100 / task.total) : 0;
-  std::vector<std::wstring> lines{title, L"The console is busy with another task:",
-                                  W(task.op) + L" " + codec::RawToDisplay(task.src),
-                                  std::to_wstring(percent) + L"% done"};
+  if (!found) return true;  // it ended in the meantime
+
   bool cancellable = task.op != "pkg_install";
-  std::vector<std::wstring> buttons{L"&Wait"};
-  if (cancellable) buttons.push_back(L"&Cancel task");
-  buttons.push_back(L"Close");
-  intptr_t choice = fui::Message(FMSG_WARNING, lines, buttons, MessageGuid);
-  if (choice == 0) {
-    ReportTask(WaitTask(task.id, title, cancellable), title);
-  } else if (cancellable && choice == 1) {
-    Run(title, false, [&] {
-      try {
-        Client().Cancel(task.id);
-      } catch (const ps5::ApiError&) {
-      }
-      if (task.op == "upload") {
-        try {
-          Client().UploadFinish(task.id);
-        } catch (const ps5::ApiError&) {
-        }
-      }
-      WaitTask(task.id, title);
-    });
+  bool cancelSent = false;
+  Progress progress(title);
+  progress.SetHint(cancellable ? L"Another task is running on the console.  Esc: cancel it or stop watching"
+                               : L"A package is installing on the console.  Esc: stop watching");
+  progress.ServerTask(task);
+  try {
+    ps5::WaitForTask(
+        Client(), task.id,
+        [&](const ps5::TaskInfo* t) {
+          if (t) progress.ServerTask(*t);
+          if (!fui::EscPressed()) return true;
+          std::vector<std::wstring> buttons{L"&Keep waiting"};
+          if (cancellable && !cancelSent) buttons.push_back(L"&Cancel the task");
+          buttons.push_back(L"&Stop watching");
+          intptr_t choice = fui::Message(
+              FMSG_WARNING,
+              {title, L"The console is busy with another task.",
+               L"The panel opens automatically when it finishes."},
+              buttons, MessageGuid);
+          progress.Draw(true);
+          if (choice <= 0) return true;
+          if (buttons[static_cast<size_t>(choice)] == L"&Stop watching") throw ps5::CancelledError();
+          cancelSent = true;
+          try {
+            Client().Cancel(task.id);
+          } catch (const ps5::ApiError&) {
+          }
+          if (task.op == "upload") {
+            // An upload only ends once its uploader calls finish.
+            try {
+              Client().UploadFinish(task.id);
+            } catch (const ps5::ApiError&) {
+            }
+          }
+          return true;
+        },
+        SleepMs, 500);
+  } catch (const ps5::CancelledError&) {
+    return false;
+  } catch (const std::exception&) {
+    return false;
   }
+  return true;
 }
 
 ps5::TaskResult Panel::WaitTask(uint64_t id, const std::wstring& title, bool cancellable) {
@@ -1789,7 +1808,7 @@ void Panel::ShowRunningTask() {
     fui::ShowInfo(L"Running task", L"No task is running on the console.");
     return;
   }
-  HandleBusy(L"Running task");
+  WatchBusy(L"Running task");
   Refresh(true);
 }
 

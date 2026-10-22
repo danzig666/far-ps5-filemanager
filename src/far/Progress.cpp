@@ -1,5 +1,6 @@
 #include "Progress.hpp"
 
+#include <algorithm>
 #include <vector>
 
 #include "../core/Http.hpp"
@@ -144,21 +145,36 @@ void Progress::Draw(bool force) {
     }
     case Mode::Task: {
       lines[0] = OpTitle(task_.op);
-      std::wstring current = ps5::path_codec::RawToDisplay(task_.current.empty() ? task_.src : task_.current);
-      lines.push_back(Fit(current));
-      if (!task_.dst.empty() && task_.op != "delete") {
+      std::wstring src = ps5::path_codec::RawToDisplay(task_.src);
+      std::wstring current = ps5::path_codec::RawToDisplay(task_.current);
+      lines.push_back(Fit(src));
+      if (!task_.dst.empty() && task_.op != "delete" && task_.op != "chmod") {
         lines.push_back(L"to");
         lines.push_back(Fit(ps5::path_codec::RawToDisplay(task_.dst)));
       }
+      if (!current.empty() && current != src) {
+        lines.push_back(L"\x1");
+        lines.push_back(Fit(L"Now: " + current));
+      }
       lines.push_back(Bar(task_.done, task_.total));
       std::wstring info = fui::FormatSize(task_.done) + L" of " + fui::FormatSize(task_.total);
-      if (task_.speed) info += L"   " + fui::FormatSize(task_.speed) + L"/s";
-      if (task_.eta) info += L"   Left " + fui::W(ps5::FormatDuration(task_.eta));
+      if (task_.srcCount > 1)
+        info += L"   Item " + std::to_wstring(std::min(task_.completedCount + 1, task_.srcCount)) + L" of " +
+                std::to_wstring(task_.srcCount);
       lines.push_back(info);
+      std::wstring timing = L"Speed " + (task_.speed ? fui::FormatSize(task_.speed) + L"/s" : std::wstring(L"-"));
+      timing += L"   Elapsed " + fui::W(ps5::FormatDuration(task_.elapsed));
+      timing += L"   Left " + (task_.eta ? fui::W(ps5::FormatDuration(task_.eta)) : std::wstring(L"-"));
+      lines.push_back(timing);
+      if (task_.state == "queued") lines.push_back(L"Queued...");
       if (task_.cancelRequested) lines.push_back(L"Cancelling...");
       fui::TaskbarProgress(task_.done, task_.total);
       break;
     }
+  }
+  if (!hint_.empty()) {
+    lines.push_back(L"\x1");
+    lines.push_back(Fit(hint_, 76));
   }
   // Far draws "\x1" lines as separators in messages.
   fui::Message(FMSG_LEFTALIGN, lines, {}, ProgressGuid);

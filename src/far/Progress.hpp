@@ -29,6 +29,9 @@ public:
   // Server-side task (copy, move, delete, ...).
   void ServerTask(const ps5::TaskInfo& task);
 
+  // Extra line at the bottom of the window (e.g. which keys do what).
+  void SetHint(std::wstring hint) { hint_ = std::move(hint); }
+
   // Polls Esc. Returns true if the user confirmed cancelling.
   bool CheckCancel();
   // CheckCancel() + throws ps5::CancelledError.
@@ -51,4 +54,5 @@ private:
   uint64_t totalFiles_ = 0, doneFiles_ = 0;
   uint64_t sessionBytes_ = 0;  // bytes moved in this run, for speed
   ps5::TaskInfo task_;
+  std::wstring hint_;
 };
