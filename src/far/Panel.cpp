@@ -12,6 +12,7 @@
 #include "FarApi.hpp"
 #include "Guids.hpp"
 #include "Progress.hpp"
+#include "Updater.hpp"
 #include "WinHttpTransport.hpp"
 
 namespace codec = ps5::path_codec;
@@ -1608,7 +1609,7 @@ void Panel::RenameCurrent() {
 void Panel::ActionsMenu() {
   ApplyCodePage();
   if (level_ == Level::Hosts || !session_) {
-    fui::ShowInfo(kTitle, L"Open a console first.");
+    if (fui::Menu(L"PS5 actions", {L"Check for &updates"}) == 0) updater::CheckForUpdates();
     return;
   }
   std::vector<ps5::ListEntry> selected = level_ == Level::Dir ? SelectedEntries(false) : std::vector<ps5::ListEntry>{};
@@ -1623,7 +1624,7 @@ void Panel::ActionsMenu() {
   }
   bool haveFile = selected.size() == 1 && !selected[0].isDir();
 
-  enum Action { InstallPkg, PkgInfoItem, LaunchElfItem, Extract, Chmod, Space, Task, Browser, Stop };
+  enum Action { InstallPkg, PkgInfoItem, LaunchElfItem, Extract, Chmod, Space, Task, Browser, Stop, Update };
   std::vector<std::wstring> items;
   std::vector<int> actions;
   auto add = [&](const std::wstring& text, int action) {
@@ -1642,6 +1643,8 @@ void Panel::ActionsMenu() {
   add(L"Running &task...", Task);
   add(L"Open &web UI in browser", Browser);
   add(L"Stop the pa&yload", Stop);
+  add(L"-", -1);
+  add(L"Check for &updates", Update);
 
   intptr_t index = fui::Menu(L"PS5 actions", items, session_->host.Endpoint());
   if (index < 0 || static_cast<size_t>(index) >= actions.size()) return;
@@ -1675,6 +1678,7 @@ void Panel::ActionsMenu() {
       break;
     }
     case Stop: StopPayload(); return;
+    case Update: updater::CheckForUpdates(); break;
     default: break;
   }
 }

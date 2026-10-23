@@ -95,10 +95,17 @@ jobs:
           Copy-Item build\Release\PS5FM.dll dist\PS5FM\
           Copy-Item docs\PLUGIN-README.txt dist\PS5FM\README.txt
           Compress-Archive -Path dist\PS5FM -DestinationPath "dist\PS5FM-$version-x64.zip"
+          # The bare DLL and its checksum are what "Check for updates" downloads.
+          Copy-Item build\Release\PS5FM.dll dist\PS5FM.dll
+          $hash = (Get-FileHash dist\PS5FM.dll -Algorithm SHA256).Hash.ToLower()
+          [IO.File]::WriteAllText("dist\PS5FM.dll.sha256", "$hash  PS5FM.dll`n")
       - uses: actions/upload-artifact@v4
         with:
           name: PS5FM-x64
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.dll
+            dist/*.sha256
 
   release:
     name: GitHub release
@@ -117,7 +124,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$RELEASE_TAG" dist/*.zip \
+          gh release create "$RELEASE_TAG" dist/*.zip dist/*.dll dist/*.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "PS5 File Manager $RELEASE_TAG" \

@@ -10,6 +10,7 @@
 #include "FarApi.hpp"
 #include "Guids.hpp"
 #include "Panel.hpp"
+#include "Updater.hpp"
 #include "Version.hpp"
 #include "plugin.hpp"
 
@@ -40,6 +41,10 @@ void WINAPI SetStartupInfoW(const PluginStartupInfo* info) {
   PsInfo.FSF = &FSF;
   try {
     config::LoadOptions();
+  } catch (...) {
+  }
+  try {
+    updater::CleanupOldFiles();  // leftovers of earlier updates that no Far uses any more
   } catch (...) {
   }
 }

@@ -49,12 +49,13 @@ if(WIN32 AND PS5FM_BUILD_PLUGIN)
     src/far/Panel.cpp
     src/far/Plugin.cpp
     src/far/Progress.cpp
+    src/far/Updater.cpp
     src/far/WinHttpTransport.cpp
     src/far/PS5FM.def
     src/far/PS5FM.rc
   )
   target_include_directories(PS5FM PRIVATE far-sdk src/far)
-  target_compile_definitions(PS5FM PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-  target_link_libraries(PS5FM PRIVATE ps5core winhttp)
+  target_compile_definitions(PS5FM PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
+  target_link_libraries(PS5FM PRIVATE ps5core winhttp bcrypt psapi)
   set_target_properties(PS5FM PROPERTIES PREFIX "" OUTPUT_NAME "PS5FM")
 endif()
